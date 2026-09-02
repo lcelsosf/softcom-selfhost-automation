@@ -1,0 +1,6 @@
+environment = "web"
+base_url = "http://localhost:7711"
+verify_ssl = true
+request_timeout = 30.0
+openapi_path = "/scalar/swagger/v1/swagger.json"
+mesas_database_enabled = false

@@ -1,0 +1,61 @@
+[project]
+name = "softcom-selfhost-test-automation"
+version = "0.1.0"
+description = "Automacao de testes dos endpoints do Softcom Selfhost"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28,<1",
+    "pydantic>=2.11,<3",
+    "pydantic-settings>=2.10,<3",
+    "pytest>=8.4,<9",
+    "pytest-xdist>=3.8,<4",
+    "schemathesis>=4.2,<5",
+]
+
+[project.optional-dependencies]
+database = [
+    "pyodbc>=5.2,<6",
+    "pymysql>=1.1,<2",
+    "sqlalchemy>=2.0,<3",
+]
+report = ["allure-pytest>=2.14,<3"]
+dev = [
+    "mypy>=1.17,<2",
+    "ruff>=0.12,<1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/softcom_selfhost_automation"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "api: faz chamadas HTTP à instância configurada",
+    "smoke: verificacoes criticas e rapidas",
+    "contract: validacao do contrato OpenAPI",
+    "functional: regras funcionais dos endpoints",
+    "workflow: jornadas completas de negocio",
+    "desktop: aplicavel somente ao ERP Desktop/SQL Server",
+    "web: aplicavel somente ao ERP WEB/SoftcomShop",
+    "restaurant: requer o banco auxiliar de mesas",
+    "destructive: cria ou altera dados persistidos",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "PT", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["softcom_selfhost_automation"]
