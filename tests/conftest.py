@@ -7,6 +7,7 @@ import pytest
 
 from softcom_selfhost_automation.capabilities import is_endpoint_supported
 from softcom_selfhost_automation.clients import ApiClient, AuthenticationClient
+from softcom_selfhost_automation.clients.authentication import DeviceAuthentication
 from softcom_selfhost_automation.config import Environment, Settings, load_settings
 
 
@@ -24,15 +25,26 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="Executa testes que fazem chamadas à instância configurada",
     )
+    group.addoption(
+        "--run-destructive-tests",
+        action="store_true",
+        default=False,
+        help="Executa endpoints que criam, alteram ou removem dados",
+    )
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     environment = Environment(config.getoption("--environment"))
     run_api_tests = bool(config.getoption("--run-api-tests"))
+    run_destructive_tests = bool(config.getoption("--run-destructive-tests"))
 
     for item in items:
         if item.get_closest_marker("api") and not run_api_tests:
             item.add_marker(pytest.mark.skip(reason="use --run-api-tests para acessar a API"))
+        if item.get_closest_marker("destructive") and not run_destructive_tests:
+            item.add_marker(
+                pytest.mark.skip(reason="use --run-destructive-tests para alterar dados")
+            )
         if item.get_closest_marker("desktop") and environment is not Environment.DESKTOP:
             item.add_marker(pytest.mark.skip(reason="endpoint disponível somente no Desktop"))
         if item.get_closest_marker("web") and environment is not Environment.WEB:
@@ -57,23 +69,65 @@ def api_client(settings: Settings) -> Iterator[ApiClient]:
 
 
 @pytest.fixture(scope="session")
-def access_token(settings: Settings, api_client: ApiClient) -> str:
-    if not settings.credentials_configured:
-        pytest.skip("configure SELFHOST_CLIENT_ID e SELFHOST_CLIENT_SECRET")
-    return (
-        AuthenticationClient(api_client)
-        .create_token(settings.client_id, settings.client_secret)
-        .value
-    )
+def authentication(settings: Settings, api_client: ApiClient) -> DeviceAuthentication:
+    authentication = AuthenticationClient(api_client)
+    if settings.device_url is not None:
+        return authentication.create_authentication_from_device_url(str(settings.device_url))
+    if settings.credentials_configured:
+        return DeviceAuthentication(
+            token=authentication.create_token(settings.client_id, settings.client_secret)
+        )
+    pytest.skip("configure SELFHOST_DEVICE_URL ou SELFHOST_CLIENT_ID/SELFHOST_CLIENT_SECRET")
 
 
 @pytest.fixture(scope="session")
-def authorized_client(settings: Settings, access_token: str) -> Iterator[ApiClient]:
+def authorized_client(
+    settings: Settings, authentication: DeviceAuthentication
+) -> Iterator[ApiClient]:
     with ApiClient(
-        str(settings.base_url),
+        authentication.api_base_url or str(settings.base_url),
         timeout=settings.request_timeout,
         verify_ssl=settings.verify_ssl,
-        token=access_token,
+        token=authentication.token.value,
+    ) as client:
+        yield client
+
+
+@pytest.fixture(scope="session")
+def dricaia_token(settings: Settings, authentication: DeviceAuthentication) -> str:
+    if not settings.dricaia_credentials_configured:
+        pytest.skip("configure SELFHOST_DRICAIA_EMAIL e SELFHOST_DRICAIA_PASSWORD")
+
+    base_url = authentication.api_base_url or str(settings.base_url)
+    with ApiClient(
+        base_url,
+        timeout=settings.request_timeout,
+        verify_ssl=settings.verify_ssl,
+    ) as login_client:
+        response = login_client.post(
+            "/api/v2/dricaia/login",
+            json={"email": settings.dricaia_email, "password": settings.dricaia_password},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        token = payload.get("data", {}).get("token") if isinstance(payload, dict) else None
+        if not token:
+            raise AssertionError(f"Token DricaIA ausente na resposta: {payload}")
+
+    return str(token)
+
+
+@pytest.fixture(scope="session")
+def dricaia_client(
+    settings: Settings, authentication: DeviceAuthentication, dricaia_token: str
+) -> Iterator[ApiClient]:
+    base_url = authentication.api_base_url or str(settings.base_url)
+
+    with ApiClient(
+        base_url,
+        timeout=settings.request_timeout,
+        verify_ssl=settings.verify_ssl,
+        token=dricaia_token,
     ) as client:
         yield client
 
@@ -85,7 +139,7 @@ def endpoint_is_supported(settings: Settings):  # type: ignore[no-untyped-def]
             method,
             path,
             settings.environment,
-            mesas_database_enabled=settings.mesas_database_enabled,
+            mesas_database_enabled=settings.restaurant_tests_enabled,
         )
 
     return check

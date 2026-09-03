@@ -40,6 +40,11 @@ class ApiClient:
     def post(self, path: str, **kwargs: Any) -> httpx.Response:
         return self.request("POST", path, **kwargs)
 
+    def post_url(self, url: str, **kwargs: Any) -> httpx.Response:
+        """Faz POST em URL absoluta, necessario para a URL gerada do dispositivo."""
+
+        return self._client.post(url, **kwargs)
+
     @staticmethod
     def parse_envelope(response: httpx.Response) -> Mapping[str, Any]:
         response.raise_for_status()

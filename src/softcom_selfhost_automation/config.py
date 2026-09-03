@@ -30,12 +30,17 @@ class Settings(BaseSettings):
 
     environment: Environment = Environment.DESKTOP
     base_url: AnyHttpUrl = "http://localhost:7711"  # type: ignore[assignment]
+    device_url: AnyHttpUrl | None = None
     client_id: str = ""
     client_secret: str = ""
+    dricaia_email: str = ""
+    dricaia_password: str = ""
     verify_ssl: bool = True
     request_timeout: float = Field(default=30.0, gt=0)
     openapi_path: str = "/scalar/swagger/v1/swagger.json"
+    restaurant_endpoints_enabled: bool = False
     mesas_database_enabled: bool = False
+    destructive_tests_enabled: bool = False
 
     @classmethod
     def settings_customise_sources(
@@ -56,6 +61,22 @@ class Settings(BaseSettings):
     @property
     def credentials_configured(self) -> bool:
         return bool(self.client_id and self.client_secret)
+
+    @property
+    def authentication_configured(self) -> bool:
+        """A URL do dispositivo tem precedencia sobre credenciais manuais."""
+
+        return self.device_url is not None or self.credentials_configured
+
+    @property
+    def dricaia_credentials_configured(self) -> bool:
+        return bool(self.dricaia_email and self.dricaia_password)
+
+    @property
+    def restaurant_tests_enabled(self) -> bool:
+        """Aceita a chave atual e a configuração legada do banco de mesas."""
+
+        return self.restaurant_endpoints_enabled or self.mesas_database_enabled
 
 
 def load_settings(environment: str, config_dir: Path | None = None) -> Settings:

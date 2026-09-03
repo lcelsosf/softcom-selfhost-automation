@@ -4,3 +4,5 @@ verify_ssl = true
 request_timeout = 30.0
 openapi_path = "/scalar/swagger/v1/swagger.json"
 mesas_database_enabled = false
+restaurant_endpoints_enabled = false
+destructive_tests_enabled = false

@@ -34,9 +34,38 @@ Edite `.env` localmente. O arquivo não é versionado:
 ```dotenv
 SELFHOST_ENVIRONMENT=desktop
 SELFHOST_BASE_URL=http://localhost:7711
-SELFHOST_CLIENT_ID=client-id-do-ambiente-de-automacao
-SELFHOST_CLIENT_SECRET=client-secret-do-ambiente-de-automacao
+SELFHOST_DEVICE_URL=http://servidor:7711/device/add?client_id=...&empresa_name=...&empresa_cnpj=...&device_name=...
 ```
+
+Mantenha a URL entre aspas se for defini-la diretamente no PowerShell, pois
+`&` é um operador do shell. No arquivo `.env`, cole a URL sem aspas.
+
+No perfil `desktop`, essa é a única informação de autenticação necessária. A
+automação acrescenta um `device_id` único, cadastra o dispositivo, obtém
+`client_id`/`client_secret` da resposta e gera o bearer token em
+`/authentication/token`. Se a URL tiver um prefixo de relay, ele também é
+preservado no endpoint do token.
+
+`SELFHOST_CLIENT_ID` e `SELFHOST_CLIENT_SECRET` continuam disponíveis como
+fallback para o perfil WEB ou para ambientes já cadastrados. Quando
+`SELFHOST_DEVICE_URL` estiver preenchida, ela tem precedência.
+
+Para executar também os endpoints DricaIA V2, informe as credenciais próprias:
+
+```dotenv
+SELFHOST_DRICAIA_EMAIL=
+SELFHOST_DRICAIA_PASSWORD=
+```
+
+Para incluir os endpoints de Restaurante, habilite no mesmo `.env`:
+
+```dotenv
+SELFHOST_RESTAURANT_ENDPOINTS_ENABLED=true
+```
+
+Essa chave informa que o Selfhost apontado pela URL do dispositivo já está com
+o módulo e o banco auxiliar de mesas configurados. A automação não precisa das
+credenciais diretas desse banco para testar o contrato HTTP.
 
 As variáveis `SELFHOST_*` têm precedência sobre os arquivos em `config/`.
 
@@ -53,6 +82,37 @@ Smoke no Desktop:
 ```powershell
 uv run pytest -m smoke --environment desktop --run-api-tests
 ```
+
+Contratos de todos os endpoints V1 solicitados e de todos os endpoints V2 do Desktop:
+
+```powershell
+uv run pytest tests/contract/test_desktop_endpoints.py --environment desktop --run-api-tests
+```
+
+Por segurança, métodos de escrita (`POST`, `PUT`, `PATCH` e `DELETE`) ficam
+separados e desabilitados. Mesmo habilitados, os testes de contrato enviam uma
+requisição sem payload para validar rota, autenticação e envelope sem criar uma
+massa válida:
+
+```powershell
+$env:SELFHOST_DESTRUCTIVE_TESTS_ENABLED = "true"
+uv run pytest tests/contract/test_desktop_endpoints.py --environment desktop --run-api-tests --run-destructive-tests
+```
+
+Os testes de Restaurante exigem
+`SELFHOST_RESTAURANT_ENDPOINTS_ENABLED=true`. A variável anterior
+`SELFHOST_MESAS_DATABASE_ENABLED=true` continua aceita por compatibilidade.
+Testes funcionais que efetivamente criam ou alteram registros devem usar massa
+conhecida e limpeza explícita.
+
+A suíte usa o contrato real de cada versão:
+
+- V1: envelope legado (`code`, `message`, `human` e `data`), exceto `ApiStatus`,
+  que retorna conteúdo HTML/JSON sem envelope;
+- V2: objeto JSON do recurso ou paginação (`data`, `current_page`, `meta`, etc.),
+  conforme o endpoint; `healthcheck` retorna conteúdo sem envelope;
+- DricaIA V2 usa um token separado, obtido automaticamente quando
+  `SELFHOST_DRICAIA_EMAIL` e `SELFHOST_DRICAIA_PASSWORD` estão configurados.
 
 Smoke no WEB:
 
@@ -130,13 +190,8 @@ Relatório Allure:
 uv run pytest --alluredir=allure-results --environment desktop --run-api-tests
 ```
 
-## Próximos domínios
+## Cobertura atual
 
-A implementação inicial cobre healthcheck, obtenção de token e disponibilidade
-do OpenAPI. A evolução recomendada é:
-
-1. clientes v2;
-2. produtos v2;
-3. vendas v2;
-4. fluxos completos de venda;
-5. contratos gerados com Schemathesis, filtrados pela matriz de capacidades.
+A suíte de contrato cobre os domínios V1 solicitados e todos os controllers V2
+disponíveis no Desktop. Fluxos funcionais com persistência continuam separados,
+pois precisam de massa conhecida e limpeza explícita por domínio.
