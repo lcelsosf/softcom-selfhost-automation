@@ -307,6 +307,8 @@ O documento OpenAPI esperado está em:
 
 ```text
 config/                                 perfis sem segredos
+schemas/                                baselines OpenAPI V1 e V2 versionados
+scripts/                                manutenção explícita dos baselines
 src/softcom_selfhost_automation/
 ├── assertions/                         validações reutilizáveis
 ├── builders/                           construção de massas
@@ -368,10 +370,22 @@ Resposta incompatível com o OpenAPI em GET /api/v2/clientes/contato (HTTP 200):
 - $.per_page: '10' is not of type 'integer'
 ```
 
-Os schemas não são derivados das respostas da própria execução: a fonte de verdade
-é o OpenAPI publicado em `/scalar/swagger/v1/swagger.json` e
-`/scalar/swagger/v2/swagger.json`. Dessa forma, uma alteração acidental no tipo de
-um campo é detectada em vez de incorporada automaticamente ao resultado esperado.
+Os schemas não são derivados das respostas da própria execução. A fonte de verdade
+dos testes é o baseline aprovado e versionado em `schemas/v1.openapi.json` e
+`schemas/v2.openapi.json`. A suíte também compara esses arquivos com os documentos
+publicados em `/scalar/swagger/v1/swagger.json` e
+`/scalar/swagger/v2/swagger.json`. Dessa forma, mesmo que resposta e documentação
+mudem juntas sem aviso, a diferença em relação à versão anterior é detectada.
+
+Uma divergência deve ser classificada como bug ou evolução prevista antes da
+atualização do baseline. Depois da aprovação, atualize os arquivos com:
+
+```powershell
+uv run python scripts/update_openapi_baselines.py --environment desktop
+```
+
+Revise o diff gerado antes do commit. A URL presente em `servers` é removida do
+snapshot para não versionar informações específicas do ambiente.
 
 Relatório JUnit para CI:
 

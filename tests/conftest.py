@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -96,15 +97,17 @@ def authorized_client(
 
 @pytest.fixture(scope="session")
 def openapi_documents(
-    authorized_client: ApiClient,
+    pytestconfig: pytest.Config,
 ) -> dict[str, dict[str, Any]]:
+    project_root = Path(str(pytestconfig.rootpath))
     documents: dict[str, dict[str, Any]] = {}
     for version in ("v1", "v2"):
-        response = authorized_client.get(f"/scalar/swagger/{version}/swagger.json")
-        response.raise_for_status()
-        document = response.json()
+        baseline = project_root / "schemas" / f"{version}.openapi.json"
+        if not baseline.is_file():
+            raise AssertionError(f"Baseline OpenAPI não encontrado: {baseline}")
+        document = json.loads(baseline.read_text(encoding="utf-8"))
         if not isinstance(document, dict):
-            raise AssertionError(f"OpenAPI {version} não retornou um objeto JSON")
+            raise AssertionError(f"Baseline OpenAPI {version} não contém um objeto JSON")
         documents[version] = document
     return documents
 
