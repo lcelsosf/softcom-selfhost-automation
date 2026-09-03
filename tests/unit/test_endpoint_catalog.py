@@ -3,6 +3,7 @@ from softcom_selfhost_automation.endpoint_catalog import (
     DESKTOP_V1_ENDPOINTS,
     DESKTOP_V2_ENDPOINTS,
     EndpointKind,
+    ResponseContract,
 )
 
 
@@ -49,3 +50,13 @@ def test_operacoes_de_escrita_estao_marcadas_como_destrutivas() -> None:
 
 def test_rotas_parametrizadas_possuem_caminho_de_amostra() -> None:
     assert all(endpoint.sample_path for endpoint in DESKTOP_ENDPOINTS if "{" in endpoint.path)
+
+
+def test_rotas_v1_paginadas_sem_envelope_usam_contrato_json() -> None:
+    expected = {"/api/balanco", "/api/produtos/produtos/collector"}
+
+    assert {
+        endpoint.path
+        for endpoint in DESKTOP_V1_ENDPOINTS
+        if endpoint.contract is ResponseContract.JSON_OBJECT
+    } == expected

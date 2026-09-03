@@ -40,7 +40,7 @@ class EndpointSpec:
 DESKTOP_V1_ENDPOINTS = (
     EndpointSpec("api_status", "GET", "/api/status", contract=ResponseContract.CONTENT),
     EndpointSpec("api_status", "GET", "/api/status/info", contract=ResponseContract.CONTENT),
-    EndpointSpec("balanco", "GET", "/api/balanco"),
+    EndpointSpec("balanco", "GET", "/api/balanco", contract=ResponseContract.JSON_OBJECT),
     EndpointSpec("balanco", "POST", "/api/balanco", EndpointKind.DESTRUCTIVE),
     EndpointSpec("catraca", "POST", "/api/catraca/liberar", EndpointKind.DESTRUCTIVE),
     EndpointSpec("catraca", "POST", "/api/catraca/gerar", EndpointKind.DESTRUCTIVE),
@@ -168,7 +168,12 @@ DESKTOP_V1_ENDPOINTS = (
         "/api/produtos/produtos/relacionados/{produtoId}",
         sample_path="/api/produtos/produtos/relacionados/0",
     ),
-    EndpointSpec("produtos", "GET", "/api/produtos/produtos/collector"),
+    EndpointSpec(
+        "produtos",
+        "GET",
+        "/api/produtos/produtos/collector",
+        contract=ResponseContract.JSON_OBJECT,
+    ),
     EndpointSpec("promocao", "GET", "/api/promocao"),
     EndpointSpec("restaurante", "GET", "/api/restaurantes/observacao"),
     EndpointSpec("restaurante", "GET", "/api/restaurantes/configuracao"),

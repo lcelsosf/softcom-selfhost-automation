@@ -83,7 +83,7 @@ class AuthenticationClient:
         if isinstance(resources, dict):
             resource_url = resources.get("url_base")
             if resource_url:
-                api_base_url = str(resource_url).rstrip("/")
+                api_base_url = self._normalize_api_base_url(str(resource_url))
 
         response = self._api.post_url(
             f"{token_base_url}/authentication/token",
@@ -123,3 +123,17 @@ class AuthenticationClient:
         base_path = f"/{'/'.join(prefix)}" if prefix else ""
         token_base_url = urlunsplit((parsed.scheme, parsed.netloc, base_path, "", "")).rstrip("/")
         return registration_url, token_base_url
+
+    @staticmethod
+    def _normalize_api_base_url(resource_url: str) -> str:
+        """Remove parâmetros do cadastro preservando host e prefixo da API."""
+
+        parsed = urlsplit(resource_url.strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("resources.url_base deve ser uma URL HTTP(S) valida")
+
+        path_parts = [part for part in parsed.path.split("/") if part]
+        if path_parts[-2:] == ["device", "add"]:
+            path_parts = path_parts[:-2]
+        base_path = f"/{'/'.join(path_parts)}" if path_parts else ""
+        return urlunsplit((parsed.scheme, parsed.netloc, base_path, "", "")).rstrip("/")

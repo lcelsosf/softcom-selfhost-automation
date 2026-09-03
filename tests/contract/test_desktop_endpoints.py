@@ -38,7 +38,9 @@ def _assert_endpoint_contract(response, endpoint: EndpointSpec) -> None:  # type
         assert_content_response(response)
         return
     if endpoint.contract is ResponseContract.JSON_OBJECT:
-        assert response.status_code not in {404, 405}, response.text
+        # Rotas parametrizadas usam IDs deliberadamente inexistentes e podem
+        # responder 404 mantendo um contrato JSON válido.
+        assert response.status_code != 405, response.text
         assert response.status_code < 500, response.text
         assert_json_object(response)
         return

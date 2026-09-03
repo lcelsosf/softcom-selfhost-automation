@@ -51,3 +51,19 @@ def test_preserva_prefixo_do_relay_ao_gerar_token() -> None:
 
     assert registration_url.startswith("https://relay.example/abc/device/add?")
     assert token_base_url == "https://relay.example/abc"
+
+
+def test_normaliza_url_base_retornada_device_url_retornada_pelo_selfhost() -> None:
+    api_base_url = AuthenticationClient._normalize_api_base_url(
+        "http://api-host:7711/device/add?client_id=public&device_id=pytest"
+    )
+
+    assert api_base_url == "http://api-host:7711"
+
+
+def test_normaliza_url_base_preservando_prefixo_do_relay() -> None:
+    api_base_url = AuthenticationClient._normalize_api_base_url(
+        "https://relay.example/abc/device/add?client_id=public"
+    )
+
+    assert api_base_url == "https://relay.example/abc"

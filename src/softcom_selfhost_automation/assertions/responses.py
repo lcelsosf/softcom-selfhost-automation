@@ -20,7 +20,9 @@ def assert_json_object(response: httpx.Response) -> Mapping[str, Any]:
 def assert_contract_response(response: httpx.Response) -> Mapping[str, Any]:
     """Valida que a rota existe e responde com o contrato JSON padrao."""
 
-    assert response.status_code not in {404, 405}, response.text
+    # Um recurso inexistente pode retornar 404 com o envelope correto. O 405
+    # continua indicando verbo/rota incompatível com o catálogo.
+    assert response.status_code != 405, response.text
     assert response.status_code < 500, response.text
     payload = assert_json_object(response)
     missing = REQUIRED_ENVELOPE_FIELDS.difference(payload)
