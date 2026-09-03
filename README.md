@@ -343,6 +343,15 @@ uv run ruff format --check .
 uv run mypy
 ```
 
+O workflow [`.github/workflows/quality.yml`](.github/workflows/quality.yml) executa
+automaticamente essas verificações e todos os testes offline em cada `push`, pull
+request ou acionamento manual no GitHub Actions. Ele não acessa o Selfhost, não
+carrega o `.env` e não precisa de secrets. Os testes que exigem `--run-api-tests`
+permanecem ignorados nessa etapa.
+
+As falhas conhecidas da execução contra o ambiente Desktop e as tarefas propostas
+estão registradas em [`docs/TESTS_PENDING.md`](docs/TESTS_PENDING.md).
+
 Relatório JUnit para CI:
 
 ```powershell
