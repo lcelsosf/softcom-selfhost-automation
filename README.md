@@ -73,6 +73,61 @@ As variáveis `SELFHOST_*` têm precedência sobre os arquivos em `config/`.
 
 ## Execução
 
+### Script interativo para Windows
+
+O arquivo `run_tests.ps1` centraliza a execução da suíte. Ele:
+
+- permite selecionar o ambiente Desktop ou WEB;
+- solicita e valida a URL completa do dispositivo;
+- permite habilitar testes destrutivos, exigindo uma segunda confirmação;
+- mostra cada teste como `PASSED`, `FAILED` ou `SKIPPED`;
+- salva os resultados em `allure-results/`;
+- gera `allure-report/` e abre o relatório no navegador padrão.
+
+Para iniciar o modo interativo:
+
+```powershell
+.\run_tests.ps1
+```
+
+O script exige o `uv` e instala/carrega automaticamente o extra Python
+`report`, necessário para o argumento `--alluredir`. Para gerar o relatório,
+usa o Allure CLI instalado
+no `PATH`; caso ele não esteja disponível, usa `npx` para executar o pacote
+`allure-commandline`. É necessário ter Java instalado para o Allure.
+
+Também é possível executar sem perguntas. Exemplo seguro no Desktop:
+
+```powershell
+.\run_tests.ps1 -Environment desktop -DeviceUrl "http://servidor:7711/device/add?client_id=..." -NoDestructive
+```
+
+Exemplo com testes destrutivos (a confirmação ainda será solicitada):
+
+```powershell
+.\run_tests.ps1 -Environment desktop -DeviceUrl "http://servidor:7711/device/add?client_id=..." -Destructive
+```
+
+Parâmetros disponíveis:
+
+| Parâmetro | Descrição |
+| --- | --- |
+| `-Environment desktop|web` | Define o ambiente sem abrir a seleção interativa. |
+| `-DeviceUrl "..."` | Informa a URL do dispositivo sem solicitá-la no terminal. |
+| `-NoDestructive` | Executa somente os testes seguros. |
+| `-Destructive` | Inclui as rotas de escrita e solicita confirmação. |
+
+Não combine `-Destructive` com `-NoDestructive`. No PowerShell, mantenha a URL
+entre aspas porque ela normalmente contém `&`. O script define as variáveis
+somente no processo atual e não grava a URL no `.env`.
+
+No Desktop, executa o catálogo de contratos V1 e V2. No WEB, executa os
+testes marcados como API que não sejam exclusivos do Desktop. Mesmo quando há
+falhas, o script tenta gerar o relatório e encerra com o código retornado pelo
+Pytest.
+
+### Execução manual
+
 Testes unitários do próprio projeto, sem acessar a API:
 
 ```powershell
@@ -112,26 +167,117 @@ explícita.
 ## O que o teste de contrato valida
 
 O teste não compara o JSON completo com um arquivo estático. Ele faz a chamada
-real ao endpoint e valida:
+real ao endpoint e verifica disponibilidade, autenticação e a estrutura mínima
+da resposta. A validação aplicada depende do contrato registrado para cada
+operação no catálogo.
 
-- que o verbo é aceito pela rota (não retorna `405`); um `404` com contrato
-  válido é aceito quando o ID de amostra não existe na base;
-- que não ocorreu erro interno (`status < 500`);
-- que o tipo de conteúdo e a estrutura básica correspondem à versão da API;
-- que os campos obrigatórios do envelope possuem tipos válidos, quando houver.
+### Validações HTTP comuns
 
-A suíte considera o contrato real de cada versão:
+- o método HTTP catalogado é aceito; uma resposta `405 Method Not Allowed`
+  reprova o teste;
+- a API não pode responder com erro interno: qualquer status `500` ou superior
+  reprova o teste;
+- rotas parametrizadas utilizam IDs, páginas, datas e filtros de amostra;
+- um `404` pode ser aceito nas consultas por identificador inexistente, desde
+  que a resposta ainda respeite o contrato JSON esperado;
+- endpoints de status são mais rígidos: não podem responder `404` ou `405` e
+  precisam retornar algum conteúdo.
 
-- V1: envelope legado (`code`, `message`, `human` e `data`), exceto `ApiStatus`,
-  que retorna conteúdo HTML/JSON sem envelope;
-- V2: objeto JSON do recurso ou paginação (`data`, `current_page`, `meta`, etc.),
-  conforme o endpoint; `healthcheck` retorna conteúdo sem envelope;
-- DricaIA V2 usa um token separado, obtido automaticamente quando
-  `SELFHOST_DRICAIA_EMAIL` e `SELFHOST_DRICAIA_PASSWORD` estão configurados.
+### Contrato V1
 
-Essas verificações não validam regras de negócio, valores exatos retornados ou
-persistência no banco de dados. Esses comportamentos pertencem aos testes
-funcionais e de workflow.
+Na maioria das operações V1, a resposta deve ser um objeto JSON com o envelope
+legado:
+
+```json
+{
+  "code": 0,
+  "message": null,
+  "human": null,
+  "data": {}
+}
+```
+
+A suíte valida que:
+
+- o `Content-Type` começa com `application/json`;
+- a raiz da resposta é um objeto JSON, e não uma lista ou valor simples;
+- `code`, `message`, `human` e `data` estão presentes;
+- `code` é número ou texto;
+- `message` e `human` são texto ou `null`.
+
+`ApiStatus` é uma exceção e aceita HTML ou JSON sem envelope, desde que haja
+conteúdo. As operações `/api/balanco` e
+`/api/produtos/produtos/collector` também são exceções: retornam objeto JSON
+paginado sem o envelope legado e são validadas como tal.
+
+### Contrato V2 e paginação
+
+As operações V2 devem ser um objeto JSON e declarar `Content-Type` iniciado por
+`application/json`. A estrutura pode ser o próprio recurso, um objeto de erro
+válido para uma amostra inexistente ou uma resposta paginada.
+
+Nas rotas paginadas, a suíte envia valores pequenos e determinísticos, em geral
+`page=1` e `per_page=10`. Na V1, também exercita variantes em que a página faz
+parte do caminho, como `/page/1` e `/page/1/10`. As respostas reais podem
+conter `data` e metadados como `current_page`, `per_page`, `last_page`, `total`,
+`links` ou `meta`.
+
+Isso confirma que a API aceita os parâmetros de paginação e devolve um objeto
+JSON. Atualmente, a suíte não compara os valores exatos de total, quantidade de
+páginas ou links, pois eles dependem da massa existente em cada base.
+
+`Healthcheck` é uma exceção e aceita conteúdo sem envelope JSON.
+
+### Autenticação
+
+- a URL do dispositivo é validada como HTTP(S) e deve apontar para
+  `/device/add`;
+- a automação acrescenta um `device_id` único, cadastra o dispositivo e exige
+  que a resposta forneça `client_id` e `client_secret`;
+- as credenciais são trocadas por um bearer token em `/authentication/token`;
+- o token deve existir, ter tipo `Bearer` e tempo de expiração positivo;
+- o `resources.url_base` retornado pelo Selfhost é normalizado, removendo query
+  string e `/device/add`, mas preservando um eventual prefixo de relay;
+- a DricaIA usa autenticação separada: a suíte chama
+  `POST /api/v2/dricaia/login`, extrai `data.token` e usa esse novo token apenas
+  nas operações `/api/v2/dricaia/*`.
+
+Também existe um teste negativo que envia `grant_type=password` com credenciais
+inválidas e espera o código de contrato `64` com a mensagem
+`Unsupported grant_type`.
+
+### Segurança e seleção de testes
+
+- operações `GET` são classificadas como seguras;
+- operações `POST`, `PUT`, `PATCH` e `DELETE` são classificadas como
+  destrutivas, exceto autenticações e healthchecks tratados explicitamente;
+- rotas destrutivas só executam quando
+  `SELFHOST_DESTRUCTIVE_TESTS_ENABLED=true` e `--run-destructive-tests` são
+  fornecidos;
+- o teste de contrato chama as rotas de escrita sem payload válido para
+  exercitar rota, autenticação e tratamento da requisição, sem montar uma massa
+  persistível;
+- Restaurante só executa quando
+  `SELFHOST_RESTAURANT_ENDPOINTS_ENABLED=true`;
+- testes exclusivos de Desktop ou WEB são ignorados no ambiente incompatível;
+- testes internos impedem método/rota duplicados, exigem `sample_path` para
+  rotas parametrizadas e verificam que as operações de escrita estejam marcadas
+  como destrutivas.
+
+### OpenAPI e smoke tests
+
+Além do catálogo de endpoints, a suíte verifica que:
+
+- o healthcheck e seu endpoint de informações respondem `200` e possuem
+  conteúdo;
+- o documento OpenAPI responde `200`;
+- o documento contém uma versão `openapi` ou `swagger`, possui `paths` e
+  documenta `/api/v2/healthcheck`.
+
+Essas verificações não validam valores de negócio, quantidade exata de
+registros, conteúdo integral de cada recurso nem persistência no banco de
+dados. Esses comportamentos pertencem aos testes funcionais e de workflow, que
+exigem massa conhecida e limpeza explícita.
 
 Smoke no WEB:
 
