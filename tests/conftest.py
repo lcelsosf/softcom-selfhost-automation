@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -91,6 +92,21 @@ def authorized_client(
         token=authentication.token.value,
     ) as client:
         yield client
+
+
+@pytest.fixture(scope="session")
+def openapi_documents(
+    authorized_client: ApiClient,
+) -> dict[str, dict[str, Any]]:
+    documents: dict[str, dict[str, Any]] = {}
+    for version in ("v1", "v2"):
+        response = authorized_client.get(f"/scalar/swagger/{version}/swagger.json")
+        response.raise_for_status()
+        document = response.json()
+        if not isinstance(document, dict):
+            raise AssertionError(f"OpenAPI {version} não retornou um objeto JSON")
+        documents[version] = document
+    return documents
 
 
 @pytest.fixture(scope="session")

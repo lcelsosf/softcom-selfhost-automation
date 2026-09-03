@@ -14,6 +14,9 @@ Os 45 testes ignorados são operações potencialmente destrutivas e não repres
 falhas. Antes de alterar a automação, cada divergência abaixo deve ser comparada com
 a documentação/OpenAPI e com uma resposta obtida usando massa de dados conhecida.
 
+Após a validação tipada por OpenAPI ser habilitada, a execução também passa a
+evidenciar divergências de tipos e formatos descritas em TP-006.
+
 ## Pendências mapeadas
 
 ### TP-001 — Corrigir autenticação da DricaIA
@@ -133,6 +136,32 @@ Tarefas:
 
 Critério de aceite: causa identificada e teste determinístico com massa presente ou
 ausente.
+
+### TP-006 — Alinhar respostas reais aos schemas OpenAPI V2
+
+Prioridade: alta. Categoria: contrato/backend.
+
+A validação tipada identificou divergências adicionais entre a documentação e a
+serialização atual:
+
+- `per_page` retorna `string` em diversas respostas paginadas, mas o schema declara
+  `integer`;
+- `GET /api/v2/clientes/financeiro/detalhe`,
+  `GET /api/v2/empresa/empresas/{page}`, `GET /api/v2/financeiro/cartoes` e
+  `GET /api/v2/restaurantes/mesa` retornam um objeto paginado enquanto seus schemas
+  declaram um array;
+- algumas propriedades e status de erro retornados pela API não estão documentados.
+
+Tarefas:
+
+- decidir, por rota, se o backend ou o OpenAPI representa o contrato correto;
+- corrigir `per_page` para número ou documentar explicitamente a string;
+- documentar o wrapper de paginação nas quatro rotas indicadas;
+- documentar respostas `400` e `404` existentes;
+- repetir a validação tipada até eliminar as divergências.
+
+Critério de aceite: respostas reais validam campos documentados, tipos, nulabilidade,
+arrays, objetos aninhados e formatos, sem comparar valores voláteis.
 
 ## Próximas suítes funcionais
 

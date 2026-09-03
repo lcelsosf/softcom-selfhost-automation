@@ -1,5 +1,8 @@
+from typing import Any
+
 import pytest
 
+from softcom_selfhost_automation.assertions.openapi import assert_response_matches_openapi
 from softcom_selfhost_automation.assertions.responses import (
     assert_content_response,
     assert_contract_response,
@@ -33,7 +36,11 @@ def _request(client: ApiClient, endpoint: EndpointSpec):  # type: ignore[no-unty
     return client.request(endpoint.method, endpoint.request_path, params=dict(endpoint.query))
 
 
-def _assert_endpoint_contract(response, endpoint: EndpointSpec) -> None:  # type: ignore[no-untyped-def]
+def _assert_endpoint_contract(
+    response,  # type: ignore[no-untyped-def]
+    endpoint: EndpointSpec,
+    openapi_documents: dict[str, dict[str, Any]],
+) -> None:
     if endpoint.contract is ResponseContract.CONTENT:
         assert_content_response(response)
         return
@@ -43,8 +50,18 @@ def _assert_endpoint_contract(response, endpoint: EndpointSpec) -> None:  # type
         assert response.status_code != 405, response.text
         assert response.status_code < 500, response.text
         assert_json_object(response)
-        return
-    assert_contract_response(response)
+    else:
+        assert_contract_response(response)
+
+    version = "v2" if endpoint.path.startswith("/api/v2/") else "v1"
+    assert_response_matches_openapi(
+        response,
+        openapi_documents[version],
+        endpoint.method,
+        endpoint.path,
+        allow_undocumented_status=response.status_code in {400, 404},
+        allow_undocumented_operation=True,
+    )
 
 
 @pytest.mark.api
@@ -55,12 +72,13 @@ def test_contrato_dos_endpoints_desktop(
     authorized_client: ApiClient,
     settings: Settings,
     endpoint: EndpointSpec,
+    openapi_documents: dict[str, dict[str, Any]],
 ) -> None:
     if endpoint.domain == "restaurante" and not settings.restaurant_tests_enabled:
         pytest.skip("configure SELFHOST_RESTAURANT_ENDPOINTS_ENABLED=true")
     response = _request(authorized_client, endpoint)
 
-    _assert_endpoint_contract(response, endpoint)
+    _assert_endpoint_contract(response, endpoint, openapi_documents)
 
 
 @pytest.mark.api
@@ -72,6 +90,7 @@ def test_contrato_dos_endpoints_desktop_destrutivos(
     authorized_client: ApiClient,
     settings: Settings,
     endpoint: EndpointSpec,
+    openapi_documents: dict[str, dict[str, Any]],
 ) -> None:
     if not settings.destructive_tests_enabled:
         pytest.skip("configure SELFHOST_DESTRUCTIVE_TESTS_ENABLED=true")
@@ -80,7 +99,7 @@ def test_contrato_dos_endpoints_desktop_destrutivos(
     # Sem payload, a rota deve validar a requisicao e nao persistir alteracoes.
     response = _request(authorized_client, endpoint)
 
-    _assert_endpoint_contract(response, endpoint)
+    _assert_endpoint_contract(response, endpoint, openapi_documents)
 
 
 @pytest.mark.api
@@ -90,10 +109,11 @@ def test_contrato_dos_endpoints_desktop_destrutivos(
 def test_contrato_dos_endpoints_dricaia_desktop(
     dricaia_client: ApiClient,
     endpoint: EndpointSpec,
+    openapi_documents: dict[str, dict[str, Any]],
 ) -> None:
     response = _request(dricaia_client, endpoint)
 
-    _assert_endpoint_contract(response, endpoint)
+    _assert_endpoint_contract(response, endpoint, openapi_documents)
 
 
 @pytest.mark.api

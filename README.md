@@ -352,6 +352,27 @@ permanecem ignorados nessa etapa.
 As falhas conhecidas da execução contra o ambiente Desktop e as tarefas propostas
 estão registradas em [`docs/TESTS_PENDING.md`](docs/TESTS_PENDING.md).
 
+Nos contratos V1 e V2, cada resposta também é validada contra o schema da operação
+publicado no OpenAPI correspondente. A validação percorre objetos e listas, confere
+tipos, campos obrigatórios, nulabilidade e formatos. Valores voláteis, como IDs,
+datas e tokens, não são comparados literalmente: seu tipo e formato continuam sendo
+verificados. Campos adicionais são tolerados para preservar a compatibilidade do
+Selfhost; campos documentados com tipo incorreto causam falha com o caminho JSON do
+campo divergente. Exceções legadas ausentes no OpenAPI continuam cobertas pelas
+validações estruturais existentes.
+
+Exemplo de falha produzida pela validação tipada:
+
+```text
+Resposta incompatível com o OpenAPI em GET /api/v2/clientes/contato (HTTP 200):
+- $.per_page: '10' is not of type 'integer'
+```
+
+Os schemas não são derivados das respostas da própria execução: a fonte de verdade
+é o OpenAPI publicado em `/scalar/swagger/v1/swagger.json` e
+`/scalar/swagger/v2/swagger.json`. Dessa forma, uma alteração acidental no tipo de
+um campo é detectada em vez de incorporada automaticamente ao resultado esperado.
+
 Relatório JUnit para CI:
 
 ```powershell
